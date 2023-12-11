@@ -1,0 +1,80 @@
+@startuml
+autonumber 1 "<b>[0]"
+
+actor "Payee" as Payee
+
+participant "Beneficiary Management System" as BMS
+participant "Beneficiary Registration Portal" as BRP
+
+box MISP
+participant "MOSIP & e-Signet" as eSignet
+end box
+box "Payee DFSP" 
+participant "Auth Provider" as OAuth
+participant "Mifos Core-Connector" as CC
+participant "Mifos" as Mifos
+participant "SDK" as SDK
+end box
+participant "Mojaloop" as Mojaloop  #d4f2f9
+
+Payee->BMS: Payee initiates a\nPayment Token\nRegistration from the\nBeneficiary Management\nSystem
+BMS->BRP: Redirected to\n Registration portal 
+note left
+ If a token is already 
+ linked to that user,
+ and needs to be modified,
+ then this token should be
+ provided.
+
+ {
+    PaymentToken:{}, (not part of POC)
+    # registration will only support 
+    # payment from this Payer
+ }
+end note
+
+== MISP / MOSIP Authentication == 
+
+BRP->eSignet: Redirects to /authorise API
+activate BRP
+eSignet->eSignet: Validates if claims \n is allowed by BRP
+eSignet->Payee: Redirect to Authentication pages UI
+Payee->eSignet: Enter Mosip auth detail with Mosip UIN / VID
+Payee->eSignet: Users chooses method of authentication, and then meet challenge
+eSignet-->BRP: return authorisation code
+deactivate BRP
+BRP->eSignet: Get Token
+activate BRP
+eSignet-->BRP: responds with ID token\n  and access token
+deactivate BRP
+
+== Bank Authentication == 
+
+alt if this new registration
+BRP->Payee: Payee is asked to select one of the registered DFSPs
+Payee->BRP: Payee selects FSP
+else Existing token provided by Beneficiary Management System
+BRP->BRP: <color:Green> Lookup DFSP from token \n (not part of POC)
+end
+
+BRP->OAuth: Payee redirected to login to FSP \n Provider auth for API Tokens
+activate BRP
+note left 
+Auth Code Flow: providing
+ - redirect uri 
+ -- Client ID and Secret (BRP=client)
+ -- provide scopes that we want {}
+end note
+Payee<->OAuth: Payee logs in to FSP
+OAuth->BRP: Auth JWT Token returned
+note left 
+ - Client_id (Internal to DFSP CBS)
+ - Subject (ExternalId - MOSIP UIN)
+end note
+
+BRP->BRP: Validate ExternalId matches MOSIP {UIN}
+deactivate BRP
+
+
+
+@enduml

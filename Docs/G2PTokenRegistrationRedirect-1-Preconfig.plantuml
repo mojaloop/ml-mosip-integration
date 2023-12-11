@@ -1,0 +1,44 @@
+@startuml
+autonumber 1 "<b>[0]"
+
+actor "Payee" as Payee
+
+participant "Beneficiary Management System" as BMS
+participant "Beneficiary Registration Portal" as BRP
+
+box MISP
+participant "MOSIP & e-Signet" as eSignet
+end box
+box "Payee DFSP" 
+participant "Auth Provider" as OAuth
+participant "Mifos Core-Connector" as CC
+participant "Mifos" as Mifos
+participant "SDK" as SDK
+end box
+participant "Mojaloop" as Mojaloop  #d4f2f9
+
+== Mifos :Preconfig ==
+Mifos->Mifos: Create a payment Type
+Note left
+POST /v1/paymenttypes
+{"name":"PaymentToken","description":"Mosip based beneficiary token","isCashPayment":false,"position":1}
+end note
+
+Mifos->Mifos: Create Payment \n Token client datatable
+note left
+POST /v1/datatables
+{
+    "datatableName": "PaymentTokenMapping",
+    "apptableName": "PaymentToken",
+    "columns": [
+        { "name": "ClientId", "type": "Number", "mandatory": true },
+        { "name": "PaymentTypeId", "type": "Number","mandatory": true },
+        { "name": "AccountType","type": "String", "mandatory": true },
+        { "name": "AccountNumber","type": "String","length": 100,"mandatory": true }
+        { "name": "Enabled","type": "Number","mandatory": true }
+    ]
+}
+POST /v1/datatables/register/PaymentTokenMapping/PaymentToken
+end note
+
+@enduml

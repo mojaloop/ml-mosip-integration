@@ -1,0 +1,86 @@
+@startuml
+autonumber 1 "<b>[0]"
+
+actor "Payee" as Payee
+
+participant "Beneficiary Management System" as BMS
+participant "Beneficiary Registration Portal" as BRP
+
+box MISP
+participant "MOSIP & e-Signet" as eSignet
+end box
+box "Payee DFSP" 
+participant "Auth Provider" as OAuth
+participant "Mifos Core-Connector" as CC
+participant "Mifos" as Mifos
+participant "SDK" as SDK
+end box
+participant "Mojaloop" as Mojaloop  #d4f2f9
+
+=== P2P Using Mosip Payment Token ==
+
+Mojaloop->Mojaloop: Discovery call \n initiated
+Mojaloop->>SDK: **GET** \n /parties/ALIAS/{PaymentToken}
+SDK->CC: **GET** \n /parties/ALIAS/{PaymentToken}
+activate SDK
+CC->Mifos: Get Payment Token Account mapping 
+note left
+**GET** /api/v1/datatables/PaymentTokenMapping/{PaymentToken}?genericResultSet=true
+end note
+CC->Mifos: Get Client information 
+note left
+**GET** /api/v1/clients/{clientId}
+end note
+CC->Mifos: Get Account information 
+CC->SDK:  Yes. This is Joe's Blogs account.
+deactivate SDK
+SDK->>Mojaloop: **PUT** /getParties \n Yes. This is Joe's Blogs account.
+Mojaloop->Mojaloop: Continue with\n  standard P2P
+
+
+Mojaloop->Mojaloop: Quotes call initiated
+Mojaloop->>SDK: **POST** /quotes
+SDK->CC:  **POST** /quoterequest
+activate SDK
+CC->Mifos: Get Payment Token Account mapping 
+note left
+**GET** api/v1/datatables/PaymentTokenMapping/{PaymentToken}?genericResultSet=true
+end note
+CC->Mifos: Get Account information 
+CC->CC: Validate Payee Information
+CC->CC: Validate account is active and can receive
+CC->CC: Process quote request
+CC->SDK:  Return quote
+deactivate SDK
+SDK->>Mojaloop: **PUT** /getParties \n Yes. This is Joe's Blogs account.
+Mojaloop->Mojaloop: Continue with \n standard P2P
+
+Mojaloop->Mojaloop: Transact call \n initiated
+Mojaloop->>SDK: **POST** /transfers
+SDK->CC:  **POST** /transfers
+activate SDK
+CC->Mifos: Get Payment Token Account mapping 
+note left
+**GET** api/v1/datatables/PaymentTokenMapping/{PaymentToken}?genericResultSet=true
+end note
+CC->SDK:  TransferState=RESERVED
+SDK->>Mojaloop: **PUT** /transfers
+Mojaloop->>SDK: **PATCH** /transfers
+SDK->CC: **PATCH** /transfers
+deactivate SDK
+CC->Mifos: Get Payment Token Account mapping 
+note left
+**GET** api/v1/datatables/PaymentTokenMapping/{PaymentToken}?genericResultSet=true
+end note
+alt Account Type = savings
+  CC->Mifos: **POST** /
+else Account Type = loan
+  CC->Mifos: **POST** /
+end
+
+
+
+
+
+
+@enduml
