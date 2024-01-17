@@ -31,7 +31,10 @@ end
 == Deregister existing Payment Token ==
 BRP->CC: <color:Green> Deregister Payment Token (not part of POC)
 note left
-**DELETE** users/{ID}/tokens/{PaymentToken}
+**DELETE** users/{PSUT}/tokens/{PaymentToken}
+
+<i>PSUT</i> (Partner Specific User Token)
+       Unique identifier of user provided by MOSIP login
 
 end note
 activate BRP
@@ -47,9 +50,11 @@ deactivate BRP
 
 
 == Register Payment Token ==
+
+BMS -> BRP: Mifos login (Keycloak) redirect \n (must provide <i>clientId</i> in JWT)
 BRP->CC: <color:Blue> Get Accounts for user
 note left
-**GET** users/{ID}/accounts
+**GET** client-accounts/{clientId}
 end note
 
 activate BRP
@@ -58,18 +63,34 @@ note left
 **GET** /api/v1/clients/{clientId}/accounts
 end note
 CC-->BRP: return accounts
+note bottom
+{
+   accounts: [
+      {
+            "id": 1,
+            "accountNo": "000000001",
+            "accountType": "Individual",
+            "active" true,
+      },
+      ...
+   ]
+}
+end note
 
 
 Payee->BRP: Payee selects account to link
 BRP->CC: <color:Blue> Create Payment Token and store it in cache
 note left
-**POST** users/{ID}/tokens
+**POST** users/{PSUT}/tokens
 {
     PaymentToken, # Party Id for Payee
     PayeeId, # internal Party Id for payee (FSP)
     PayeeAccountNumber, # at FSP
     PayeeAccountType, (optional)
 }
+
+<i>PSUT</i> (Partner Specific User Token)
+       Unique identifier of user provided by MOSIP login
 end note
 
 CC->CC: Store Payment Token in cache

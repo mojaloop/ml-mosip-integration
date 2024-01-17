@@ -45,11 +45,6 @@ alt Account exists and active
          {
             "party": {
                 "name": "Joe Blogs",
-                "personalInfo": {
-                      "complexName": {...},
-                      "dateOfBirth": "1966-06-16",
-                      "kycInformation": "..."
-                },
                 "partyIdInfo":{
                       "partyIdType": {ALIAS},
                       "partyIdentifier":{PaymentToken},
@@ -75,7 +70,7 @@ activate SDK
 CC->CC: Get Payment Token from cache
 CC->Mifos: **GET** api/v1/clients/{ID}/accounts
 note left
-  Get Client Account details
+  Validate if Client Account is active
 end note
 CC->CC: Process quote request
 CC->SDK: Return quote
@@ -100,12 +95,12 @@ deactivate SDK
 CC->CC: Get Payment Token from cache
 CC->Mifos: **GET** api/v1/clients/{ID}/accounts
 note left
-  Get Client Account details
+  Validate if Client Account is active
 end note
 
 CC->Mifos: **POST** api/v1/accounttransfers
 note left
-  Transfer of funds from one account to another
+  Transfer of funds from prefunded liquidity account to party's account
   docs: [[https://demo.mifos.io/api-docs/apiLive.htm#accounttransfer]]
 
   Payload:
