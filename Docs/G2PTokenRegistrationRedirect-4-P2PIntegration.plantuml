@@ -9,7 +9,7 @@ participant "Beneficiary Registration Portal" as BRP
 box MISP
 participant "MOSIP & e-Signet" as eSignet
 end box
-box "Payee DFSP" 
+box "Payee DFSP"
 participant "Auth Provider" as OAuth
 participant "Mifos Core-Connector" as CC
 participant "Mifos" as Mifos
@@ -22,64 +22,113 @@ participant "Mojaloop" as Mojaloop  #d4f2f9
 Mojaloop->Mojaloop: Discovery call \n initiated
 Mojaloop->>SDK: **GET** \n /parties/ALIAS/{PaymentToken}
 SDK->CC: **GET** \n /parties/ALIAS/{PaymentToken}
+
 activate SDK
-CC->Mifos: Get Payment Token Account mapping 
+CC->CC: Get Payment Token from cache
+CC->Mifos: **GET** api/v1/clients/{ID}/accounts
 note left
-**GET** /api/v1/datatables/PaymentTokenMapping/{PaymentToken}?genericResultSet=true
+  Get Client Account details
+
+  <i>Note:</i>
+  There's no way to provide access only to 1 account!
 end note
-CC->Mifos: Get Client information 
-note left
-**GET** /api/v1/clients/{clientId}
-end note
-CC->Mifos: Get Account information 
-CC->SDK:  Yes. This is Joe's Blogs account.
+CC->CC: Find and validate particular account \n (based on token data)
+
+alt Account exists and active
+    CC->Mifos: **GET** api/v1/clients/{ID}
+    note left
+       Get client details
+    end note
+    CC->SDK:  Yes. This is Joe's Blogs account.
+    note left
+       Payload:
+         {
+            "party": {
+                "name": "Joe Blogs",
+                "personalInfo": {
+                      "complexName": {...},
+                      "dateOfBirth": "1966-06-16",
+                      "kycInformation": "..."
+                },
+                "partyIdInfo":{
+                      "partyIdType": {ALIAS},
+                      "partyIdentifier":{PaymentToken},
+                      ...
+                }
+            }
+         }
+    end note
+else
+    CC -> SDK: Party error response
+end
+
 deactivate SDK
+
 SDK->>Mojaloop: **PUT** /getParties \n Yes. This is Joe's Blogs account.
 Mojaloop->Mojaloop: Continue with\n  standard P2P
-
 
 Mojaloop->Mojaloop: Quotes call initiated
 Mojaloop->>SDK: **POST** /quotes
 SDK->CC:  **POST** /quoterequest
+
 activate SDK
-CC->Mifos: Get Payment Token Account mapping 
+CC->CC: Get Payment Token from cache
+CC->Mifos: **GET** api/v1/clients/{ID}/accounts
 note left
-**GET** api/v1/datatables/PaymentTokenMapping/{PaymentToken}?genericResultSet=true
+  Get Client Account details
 end note
-CC->Mifos: Get Account information 
-CC->CC: Validate Payee Information
-CC->CC: Validate account is active and can receive
 CC->CC: Process quote request
-CC->SDK:  Return quote
+CC->SDK: Return quote
 deactivate SDK
+
 SDK->>Mojaloop: **PUT** /getParties \n Yes. This is Joe's Blogs account.
 Mojaloop->Mojaloop: Continue with \n standard P2P
 
 Mojaloop->Mojaloop: Transact call \n initiated
 Mojaloop->>SDK: **POST** /transfers
 SDK->CC:  **POST** /transfers
+
 activate SDK
-CC->Mifos: Get Payment Token Account mapping 
-note left
-**GET** api/v1/datatables/PaymentTokenMapping/{PaymentToken}?genericResultSet=true
-end note
+CC->CC: Get Payment Token from cache
+CC->CC: Validate quote
 CC->SDK:  TransferState=RESERVED
 SDK->>Mojaloop: **PUT** /transfers
 Mojaloop->>SDK: **PATCH** /transfers
 SDK->CC: **PATCH** /transfers
 deactivate SDK
-CC->Mifos: Get Payment Token Account mapping 
+
+CC->CC: Get Payment Token from cache
+CC->Mifos: **GET** api/v1/clients/{ID}/accounts
 note left
-**GET** api/v1/datatables/PaymentTokenMapping/{PaymentToken}?genericResultSet=true
+  Get Client Account details
 end note
-alt Account Type = savings
-  CC->Mifos: **POST** /
-else Account Type = loan
-  CC->Mifos: **POST** /
-end
 
+CC->Mifos: **POST** api/v1/accounttransfers
+note left
+  Transfer of funds from one account to another
+  docs: [[https://demo.mifos.io/api-docs/apiLive.htm#accounttransfer]]
 
+  Payload:
+    {
+      "fromOfficeId":1,
+      "fromClientId":1,
+      "fromAccountType":2,
+      "fromAccountId":1,
+      "toOfficeId":1,
+      "toClientId":1,
+      "toAccountType":2,
+      "toAccountId":2,
+      "dateFormat":"dd MMMM yyyy",
+      "locale":"en",
+      "transferDate":"01 August 2011",
+      "transferAmount":"112.45",
+      "transferDescription":"A description of the transfer"
+    }
 
+    <i>Note:</i>
+       **from...**-fields are configured
+
+end note
 
 
 

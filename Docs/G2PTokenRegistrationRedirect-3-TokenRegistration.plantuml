@@ -9,7 +9,7 @@ participant "Beneficiary Registration Portal" as BRP
 box MISP
 participant "MOSIP & e-Signet" as eSignet
 end box
-box "Payee DFSP" 
+box "Payee DFSP"
 participant "Auth Provider" as OAuth
 participant "Mifos Core-Connector" as CC
 participant "Mifos" as Mifos
@@ -17,7 +17,7 @@ participant "SDK" as SDK
 end box
 participant "Mojaloop" as Mojaloop  #d4f2f9
 
-== PaymentToken selection == 
+== PaymentToken selection ==
 
 alt use MOSIP token
 BRP->BRP: Use Returned Mosip token \n (This may be either UIN \n of Mosip Token depends \n on what is made available)
@@ -28,32 +28,32 @@ BRP->BRP: <color:Green> Create new Global Token for Payee\n  (not part of POC)
 end
 
 
-== Deregister existing Payment Token == 
+== Deregister existing Payment Token ==
 BRP->CC: <color:Green> Deregister Payment Token (not part of POC)
-note left 
-{
-    PaymentToken: {},
-    PayerPartyId: {}, 
-    Client_id: {} # internal to DFSP CBS
-}
+note left
+**DELETE** users/{ID}/tokens/{PaymentToken}
+
 end note
 activate BRP
 
-CC->Mifos: Deregister Payment\n  Token Mapping
+CC->CC: Delete Payment Token from cache
 CC->SDK: <color:Red> **DELETE** /accounts  (not part of POC)
-SDK->>Mojaloop: **DELETE** \n /participants/ALIAS/{PaymentToken} 
-Mojaloop->>SDK: **PUT** \n /participants/ALIAS/{PaymentToken} 
+SDK->>Mojaloop: **DELETE** \n /participants/ALIAS/{PaymentToken}
+Mojaloop->>SDK: **PUT** \n /participants/ALIAS/{PaymentToken}
 SDK-->CC: return
 
 CC-->BRP: <color:Green> return success
 deactivate BRP
 
 
-== Register Payment Token == 
-BRP->CC: <color:Blue> Get Accounts for user 
-activate BRP
-CC->Mifos: Get Accounts for user 
+== Register Payment Token ==
+BRP->CC: <color:Blue> Get Accounts for user
+note left
+**GET** users/{ID}/accounts
+end note
 
+activate BRP
+CC->Mifos: Get Accounts for user
 note left
 **GET** /api/v1/clients/{clientId}/accounts
 end note
@@ -61,8 +61,9 @@ CC-->BRP: return accounts
 
 
 Payee->BRP: Payee selects account to link
-BRP->CC: <color:Blue> Register Payment Token
+BRP->CC: <color:Blue> Create Payment Token and store it in cache
 note left
+**POST** users/{ID}/tokens
 {
     PaymentToken, # Party Id for Payee
     PayeeId, # internal Party Id for payee (FSP)
@@ -71,13 +72,10 @@ note left
 }
 end note
 
-CC->Mifos: Register Payment Token Mapping
-note left
- **POST** /api/v1/datatables/PaymentTokenMapping/{PaymentToken} {...}
-end note
+CC->CC: Store Payment Token in cache
 CC->SDK: **POST** /accounts
 SDK->>Mojaloop: **POST** \n /participants/ALIAS/{PaymentToken} \n register payment token in alias
-Mojaloop->>SDK: **PUT** \n /participants/ALIAS/{PaymentToken} 
+Mojaloop->>SDK: **PUT** \n /participants/ALIAS/{PaymentToken}
 SDK-->CC: return
 CC-->BRP: return success
 deactivate BRP
