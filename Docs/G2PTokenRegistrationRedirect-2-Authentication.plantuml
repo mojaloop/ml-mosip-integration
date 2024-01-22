@@ -4,15 +4,17 @@ autonumber 1 "<b>[0]"
 actor "Payee" as Payee
 
 participant "Beneficiary Management System" as BMS
+box "Beneficiary Registration Portal" #LightBlue
 participant "Beneficiary Registration Portal" as BRP
-
-box MISP
-participant "MOSIP & e-Signet" as eSignet
+participant "SDK" as BSDK
 end box
-box "Payee DFSP" 
-participant "Auth Provider" as OAuth
-participant "Mifos Core-Connector" as CC
+
+participant "MOSIP & e-Signet\nMISP" as eSignet
+
+box "Payee DFSP"
 participant "Mifos" as Mifos
+participant "Mifos Core-Connector" as CC
+participant "Token Adapter" as Adapter
 participant "SDK" as SDK
 end box
 participant "Mojaloop" as Mojaloop  #d4f2f9
@@ -48,31 +50,54 @@ activate BRP
 eSignet-->BRP: responds with ID token\n  and access token
 deactivate BRP
 
-== Bank Authentication == 
+== Select Mojaloop Payee Identifier == 
 
 alt if this new registration
-BRP->Payee: Payee is asked to select one of the registered DFSPs
-Payee->BRP: Payee selects FSP
+
+   BRP->Payee: Payee is asked to select a Payee Identifier Type
+activate BRP
+   Payee->BRP: Payee selects Payee Identifier Type (e.g. MSISDN or IBAN)
+   BRP->Payee: Payee is asked to enter their Payee Identifier
+   Payee->BRP: Payee selects Payee Identifier Type (e.g. +255 123 456 789)
+
 else Existing token provided by Beneficiary Management System
-BRP->BRP: <color:Green> Lookup DFSP from token \n (not part of POC)
+   BRP->BRP: <color:Green> Lookup  from token using MOSIP PSUT
+   BRP->Payee: <color:Green> Allow user to modify Payee Identifier
+   Payee->BRP: <color:Green> Use update Payee Identifier and Type
 end
 
-BRP->OAuth: Payee redirected to login to FSP \n Provider auth for API Tokens
-activate BRP
-note left 
-Auth Code Flow: providing
- - redirect uri 
- -- Client ID and Secret (BRP=client)
- -- provide scopes that we want {}
+BRP->>Mojaloop: GET \Parties\{Type}\{ID}    
+note left
+  Validate Payee Identifier by 
+  calling Mojaloop discovery
 end note
-Payee<->OAuth: Payee logs in to FSP
-OAuth->BRP: Auth JWT Token returned
-note left 
- - Client_id (Internal to DFSP CBS)
- - Subject (ExternalId - MOSIP UIN)
-end note
+Mojaloop->>SDK: GET /parties/{Type}/{ID}
+SDK->Adapter: GET /parties/{Type}/{ID}  
+activate SDK
+Adapter->CC: pass through
+CC->Mifos: lookup Payee Identifier\naccount in Mifos
+Mifos-->CC: return 
+CC-->Adapter: return 
+Adapter-->SDK: return Payee Name and personal details
+deactivate SDK
+SDK->>Mojaloop: PUT \Parties 
+Mojaloop->>BRP: PUT \Parties
+deactivate BRP
 
-BRP->BRP: Validate ExternalId matches MOSIP {UIN}
+== Validate Personal Details == 
+
+BRP->BRP: Retrieve personal details from \nPUT Parties response body
+activate BRP
+BRP->eSignet: Use MOSIP ID Token to access Personal Details
+BRP->BRP: Validate PUT Parties Payee Name \nand personal details against MOSIP personal details
+BRP->BRP: If provided validate ExternalId \nmatches MOSIP {UIN}
+alt if personal details do not match
+   BRP->Payee: Payee is asked to update their Payee Identifier
+   Payee->BRP: Payee updates their Payee Identifier
+   BRP->BRP: Repeat GET /parties call to mojaloop \nand validate Personal Details
+else if personal details match
+   BRP->BRP: Continue
+end
 deactivate BRP
 
 

@@ -4,15 +4,17 @@ autonumber 1 "<b>[0]"
 actor "Payee" as Payee
 
 participant "Beneficiary Management System" as BMS
+box "Beneficiary Registration Portal" #LightBlue
 participant "Beneficiary Registration Portal" as BRP
-
-box MISP
-participant "MOSIP & e-Signet" as eSignet
+participant "SDK" as BSDK
 end box
+
+participant "MOSIP & e-Signet\nMISP" as eSignet
+
 box "Payee DFSP"
-participant "Auth Provider" as OAuth
-participant "Mifos Core-Connector" as CC
 participant "Mifos" as Mifos
+participant "Mifos Core-Connector" as CC
+participant "Token Adapter" as Adapter
 participant "SDK" as SDK
 end box
 participant "Mojaloop" as Mojaloop  #d4f2f9
@@ -21,9 +23,12 @@ participant "Mojaloop" as Mojaloop  #d4f2f9
 
 Mojaloop->Mojaloop: Discovery call \n initiated
 Mojaloop->>SDK: **GET** \n /parties/ALIAS/{PaymentToken}
-SDK->CC: **GET** \n /parties/ALIAS/{PaymentToken}
+SDK->Adapter: **GET** \n /parties/ALIAS/{PaymentToken}
+activate Adapter
+Adapter->Adapter: Lookup Payment Token \n with mapped Itentifier \nand type from cache 
+Adapter->CC: **GET** \n /parties/{PayeeIdentifierType}/{PayeeIdentifier}
+deactivate Adapter
 
-activate SDK
 CC->CC: Get Payment Token from cache
 CC->Mifos: **GET** api/v1/clients/{ID}/accounts
 note left
@@ -39,7 +44,7 @@ alt Account exists and active
     note left
        Get client details
     end note
-    CC->SDK:  Yes. This is Joe's Blogs account.
+    CC-->Adapter:  Yes. This is Joe's Blogs account.
     note left
        Payload:
          {
@@ -53,8 +58,10 @@ alt Account exists and active
             }
          }
     end note
+    Adapter-->SDK:  Yes. This is Joe's Blogs account.
 else
-    CC -> SDK: Party error response
+    CC --> Adapter: Party error response
+    Adapter --> SDK: Party error response
 end
 
 deactivate SDK
@@ -64,33 +71,47 @@ Mojaloop->Mojaloop: Continue with\n  standard P2P
 
 Mojaloop->Mojaloop: Quotes call initiated
 Mojaloop->>SDK: **POST** /quotes
-SDK->CC:  **POST** /quoterequest
-
+SDK->Adapter:  **POST** /quoterequest
 activate SDK
+
+activate Adapter
+Adapter->Adapter: Lookup Payment Token \n with mapped Itentifier \nand type from cache 
+Adapter->CC: **POST** /quoterequest
+deactivate Adapter
+
 CC->CC: Get Payment Token from cache
 CC->Mifos: **GET** api/v1/clients/{ID}/accounts
 note left
   Validate if Client Account is active
 end note
 CC->CC: Process quote request
-CC->SDK: Return quote
+CC-->Adapter: Return quote
+Adapter-->SDK: Return quote
 deactivate SDK
+SDK->>Mojaloop: **PUT** /quotes 
 
-SDK->>Mojaloop: **PUT** /getParties \n Yes. This is Joe's Blogs account.
 Mojaloop->Mojaloop: Continue with \n standard P2P
 
 Mojaloop->Mojaloop: Transact call \n initiated
 Mojaloop->>SDK: **POST** /transfers
-SDK->CC:  **POST** /transfers
 
+SDK->Adapter:  **POST** /transfers
+activate Adapter
+Adapter->Adapter: Lookup Payment Token \n with mapped Itentifier \nand type from cache 
+Adapter->CC: **POST** /transfers
+deactivate Adapter
 activate SDK
 CC->CC: Get Payment Token from cache
 CC->CC: Validate quote
-CC->SDK:  TransferState=RESERVED
+CC-->Adapter:  TransferState=RESERVED
+Adapter-->SDK:  TransferState=RESERVED
 SDK->>Mojaloop: **PUT** /transfers
 Mojaloop->>SDK: **PATCH** /transfers
-SDK->CC: **PATCH** /transfers
-deactivate SDK
+SDK->Adapter: **PATCH** /transfers
+activate Adapter
+Adapter->Adapter: Lookup Payment Token \n with mapped Itentifier \nand type from cache 
+Adapter->CC: **PATCH** /transfers
+deactivate Adapter
 
 CC->CC: Get Payment Token from cache
 CC->Mifos: **GET** api/v1/clients/{ID}/accounts
@@ -122,9 +143,8 @@ note left
 
     <i>Note:</i>
        **from...**-fields are configured
-
 end note
-
-
-
+CC-->Adapter:  return
+Adapter-->SDK:  return
+deactivate SDK
 @enduml
