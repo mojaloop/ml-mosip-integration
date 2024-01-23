@@ -1,0 +1,148 @@
+@startuml
+autonumber 1 "<b>[0]"
+
+actor "Payee" as Payee
+
+participant "Beneficiary Registration Portal" as BRP
+
+box "DFSP" #LightBlue
+participant "Core Connector" as CC
+participant "Token Adapter" as Adapter
+participant "SDK" as SDK
+end box
+participant "Mojaloop" as Mojaloop  #d4f2f9
+
+== Register Token ==
+BRP->Adapter: POST /register
+note left
+**POST** users/{PSUT}/tokens
+{
+    PaymentToken, # Party Id for Payee
+    PayeeId, # Mojaloop Payee Identifier
+    PayeeItentifierType # Mojaloop Payee Identifier Type
+}
+
+<i>PSUT</i> (Partner Specific User Token)
+       Unique identifier of user provided by MOSIP login
+end note
+Adapter-->BRP: return 202
+
+== Map token in Discovery ==
+
+Mojaloop->>SDK: GET /parties/{Type}/{ID}
+note right
+{Type} = MSISDN, EMAIL, ACCOUNT_ID, 
+         BUSINESS, DEVICE, IBAN
+end note
+SDK->Adapter: GET /parties/{Type}/{ID}
+Adapter->CC: GET /parties/{Type}/{ID}
+note right
+pass through
+end note
+CC->CC: Use party identifier to \nconfirm party account
+CC-->Adapter: return 
+Adapter-->SDK: return
+SDK-->>Mojaloop: PUT /parties/{Type}/{ID}
+
+Mojaloop->>SDK: GET /parties/ALIAS/{ID}
+SDK->Adapter: GET /parties/ALIAS/{ID}
+Adapter->Adapter: Lookup ALIAS in Cache
+Adapter->Adapter: Substitute PartyIdType and PartyItenfier\n with mapped values in PartyIdInfo Object
+alt ALIAS not found
+Adapter-->SDK: return error
+note left
+{
+  "statusCode": "string",
+  "message": "string"
+}
+end note
+SDK->>Mojaloop: PUT /parties/ALIAS/{ID}/error
+else
+Adapter->CC: GET /parties/{Type}/{ID}
+note right
+{Type} = MSISDN, EMAIL, ACCOUNT_ID, 
+         BUSINESS, DEVICE, IBAN
+end note
+CC->CC: Use party identifier to \nconfirm party account
+CC-->Adapter: return 
+Adapter->Adapter: Substitute PartyIdType and PartyItenfier\n with ALIAS token in PartyIdInfo Object
+Adapter-->SDK: return
+SDK-->>Mojaloop: PUT /parties/{Type}/{ID}
+end
+
+== Map token in Agreement ==
+
+Mojaloop->>SDK: POST /quotes
+note right
+requestbody.payee.partyInfo.partyIdType = 
+       MSISDN, EMAIL, ACCOUNT_ID, 
+       BUSINESS, DEVICE, IBAN
+end note
+SDK->Adapter: POST /quoterequests
+Adapter->CC: POST /quoterequests
+note right
+pass through
+end note
+CC->CC: Use party identifier to \nconfirm party account
+CC-->Adapter: return 
+Adapter-->SDK: return
+SDK-->>Mojaloop: PUT /quotes
+
+Mojaloop->>SDK: POST /quotes
+note right
+requestbody.payee.partyInfo.partyIdType = ALIAS
+end note
+SDK->Adapter: POST /quoterequests
+Adapter->Adapter: Lookup ALIAS in Cache
+Adapter->Adapter: Substitute PartyIdType and PartyItenfier\n with mapped values in PartyIdInfo Object
+Adapter->CC: POST /quoterequests
+note right
+requestbody.payee.partyInfo.partyIdType = 
+       MSISDN, EMAIL, ACCOUNT_ID, 
+       BUSINESS, DEVICE, IBAN
+end note
+CC->CC: Perform quote request
+CC-->Adapter: return 
+Adapter->Adapter: Substitute PartyIdType and PartyItenfier\n with ALIAS token in PartyIdInfo Object
+Adapter-->SDK: return
+SDK-->>Mojaloop: PUT /quotes/{ID}
+
+== Map token in Transfers ==
+
+Mojaloop->>SDK: POST /transfer
+note right
+Transfer for quote that require no mapping
+end note
+SDK->Adapter: POST /transfer
+
+Adapter->CC: POST /transfer
+note right
+pass through
+end note
+CC->CC: Use party identifier to \nconfirm party account
+CC-->Adapter: return 
+Adapter-->SDK: return
+SDK-->>Mojaloop: PUT /transfer
+
+Mojaloop->>SDK: POST /transfer
+note right
+Transfer for quote that require ALIAS token mapping
+end note
+SDK->Adapter: POST /transfer
+Adapter->Adapter: Lookup ALIAS in Cache
+Adapter->Adapter: Substitute PartyIdType and PartyItenfier\n with mapped values in PartyIdInfo Object
+Adapter->CC: POST /transfer
+note right
+requestbody.to.partyIdType = 
+       MSISDN, EMAIL, ACCOUNT_ID, 
+       BUSINESS, DEVICE, IBAN
+end note
+CC->CC: Perform quote request
+CC-->Adapter: return 
+Adapter->Adapter: Substitute PartyIdType and PartyItenfier\n with ALIAS token in PartyIdInfo Object
+Adapter-->SDK: return
+SDK-->>Mojaloop: PUT /transfer/{ID}
+
+
+
+@enduml
