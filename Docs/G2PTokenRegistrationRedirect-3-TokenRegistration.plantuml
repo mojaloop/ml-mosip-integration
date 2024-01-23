@@ -4,15 +4,17 @@ autonumber 1 "<b>[0]"
 actor "Payee" as Payee
 
 participant "Beneficiary Management System" as BMS
+box "Beneficiary Registration Portal" #LightBlue
 participant "Beneficiary Registration Portal" as BRP
-
-box MISP
-participant "MOSIP & e-Signet" as eSignet
+participant "SDK" as BSDK
 end box
+
+participant "MOSIP & e-Signet\nMISP" as eSignet
+
 box "Payee DFSP"
-participant "Auth Provider" as OAuth
-participant "Mifos Core-Connector" as CC
 participant "Mifos" as Mifos
+participant "Mifos Core-Connector" as CC
+participant "Token Adapter" as Adapter
 participant "SDK" as SDK
 end box
 participant "Mojaloop" as Mojaloop  #d4f2f9
@@ -29,7 +31,7 @@ end
 
 
 == Deregister existing Payment Token ==
-BRP->CC: <color:Green> Deregister Payment Token (not part of POC)
+BRP->Adapter: <color:Green> Deregister Payment Token (not part of POC)
 note left
 **DELETE** users/{PSUT}/tokens/{PaymentToken}
 
@@ -39,68 +41,56 @@ note left
 end note
 activate BRP
 
-CC->CC: Delete Payment Token from cache
-CC->SDK: <color:Red> **DELETE** /accounts  (not part of POC)
-SDK->>Mojaloop: **DELETE** \n /participants/ALIAS/{PaymentToken}
-Mojaloop->>SDK: **PUT** \n /participants/ALIAS/{PaymentToken}
-SDK-->CC: return
+Adapter->Adapter: Delete Payment Token from cache
 
-CC-->BRP: <color:Green> return success
+Adapter-->BRP: <color:Green> return success
+
+BRP->BSDK: <color:Green> **DELETE** /accounts 
+BSDK->>Mojaloop: <color:Green> **DELETE** \n /participants/ALIAS/{PaymentToken}
+Mojaloop->>BSDK: <color:Green> **PUT** \n /participants/ALIAS/{PaymentToken}
+BSDK-->BRP: <color:Green> return success
 deactivate BRP
-
 
 == Register Payment Token ==
 
-BMS -> BRP: Mifos login (Keycloak) redirect \n (must provide <i>clientId</i> in JWT)
-BRP->CC: <color:Blue> Get Accounts for user
+BRP->BRP: Token stored in perisistant cache
 note left
-**GET** client-accounts/{clientId}
-end note
-
-activate BRP
-CC->Mifos: Get Accounts for user
-note left
-**GET** /api/v1/clients/{clientId}/accounts
-end note
-CC-->BRP: return accounts
-note bottom
+**PSUT**: #(Partner Specific User Token)
+          # Unique identifier of user provided by MOSIP login
 {
-   accounts: [
-      {
-            "id": 1,
-            "accountNo": "000000001",
-            "accountType": "Individual",
-            "active" true,
-      },
-      ...
-   ]
+    PaymentToken, # Party Id for Payee
+    PayeeId, # Mojaloop Payee Identifier
+    PayeeItentifierType # Mojaloop Payee Identifier Type
 }
 end note
 
 
-Payee->BRP: Payee selects account to link
-BRP->CC: <color:Blue> Create Payment Token and store it in cache
+
+
+BRP->Adapter: <color:Blue> Configure Adapater with Token
 note left
 **POST** users/{PSUT}/tokens
 {
     PaymentToken, # Party Id for Payee
-    PayeeId, # internal Party Id for payee (FSP)
-    PayeeAccountNumber, # at FSP
-    PayeeAccountType, (optional)
+    PayeeId, # Mojaloop Payee Identifier
+    PayeeItentifierType # Mojaloop Payee Identifier Type
 }
 
 <i>PSUT</i> (Partner Specific User Token)
        Unique identifier of user provided by MOSIP login
 end note
 
-CC->CC: Store Payment Token in cache
-CC->SDK: **POST** /accounts
-SDK->>Mojaloop: **POST** \n /participants/ALIAS/{PaymentToken} \n register payment token in alias
-Mojaloop->>SDK: **PUT** \n /participants/ALIAS/{PaymentToken}
-SDK-->CC: return
-CC-->BRP: return success
+Adapter->Adapter: Store Payment Token in cache
+Adapter-->BRP: return success
+
+BRP->BSDK: **POST** /accounts
+note left 
+Register Payment Token in Mojaloop Oracle
+end note
+BSDK->>Mojaloop: **POST** \n /participants/ALIAS/{PaymentToken} \n register payment token in alias
+Mojaloop->>BSDK: **PUT** \n /participants/ALIAS/{PaymentToken}
+BSDK-->BRP: return
+
 deactivate BRP
-
-
 
 @enduml
